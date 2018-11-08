@@ -116,6 +116,7 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
         std::string m_accept_trx_exchange = "";
         std::string m_applied_trx_exchange = "";
         std::string m_accept_block_exchange = "";
+        std::string m_irreversible_block_exchange = "";
         bool m_deserialize_trace_action_data = true;
 
     };
@@ -392,6 +393,8 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
     void rabbitmq_plugin_impl::_process_irreversible_block(const chain::block_state_ptr& bs)
     {
+        string block_metadata_json = fc::json::to_string(bs);
+        producer->trx_rabbitmq_sendmsg("", m_irreversible_block_exchange, block_metadata_json);
     }
 
     void rabbitmq_plugin_impl::deserialize_action_data(chain::action_trace& at){
@@ -456,6 +459,8 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
                  "The exchange for accepted transaction.")
                 ("rabbitmq-accept-block-exchange", bpo::value<std::string>()->default_value("block.accepted"),
                  "The exchange for accepted blocks." )
+                ("rabbitmq-irreversible-block-exchange", bpo::value<std::string>()->default_value("block.irreversible"),
+                 "The exchange for irreversible blocks." )
                 ("rabbitmq-applied-trx-exchange", bpo::value<std::string>()->default_value("trx.applied"),
                  "The exchange for appiled transaction.")
                 ("rabbitmq-username", bpo::value<std::string>()->default_value("guest"),
@@ -491,6 +496,9 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
                 }
                 if (options.count("rabbitmq-accept-block-exchange") != 0){
                     my->m_accept_block_exchange = options.at("rabbitmq-accept-block-exchange").as<std::string>();
+                }
+                if (options.count("rabbitmq-irreversible-block-exchange") != 0){
+                    my->m_irreversible_block_exchange = options.at("rabbitmq-irreversible-block-exchange").as<std::string>();
                 }
                 if (options.count("rabbitmq-deserialize-trace-action-data") != 0){
                     my->m_deserialize_trace_action_data = options.at("rabbitmq-deserialize-trace-action-data").as<bool>();
