@@ -100,7 +100,7 @@ int rabbitmq_producer::trx_rabbitmq_init(std::string hostname, uint32_t port, st
 void rabbitmq_producer::trx_rabbitmq_sendmsg(std::string routingKey, std::string exchange, std::string msgstr){
   amqp_basic_properties_t props;
   props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;
-  props.content_type = amqp_cstring_bytes("text/plain");
+  props.content_type = amqp_cstring_bytes("application/json");
   props.delivery_mode = 2; /* persistent delivery mode */
   
 

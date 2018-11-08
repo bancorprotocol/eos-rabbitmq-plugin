@@ -48,9 +48,12 @@ parameters for rabbitmq_plugin
 # --rabbitmq-username guest
 # --rabbitmq-password guest
 # --rabbitmq-accept-trx-exchange trx.accepted
+# --rabbitmq-accept-block-exchange block.accepted
+# --rabbitmq-irreversible-block-exchange block.irreversible
 # --rabbitmq-applied-trx-exchange trx.applied
 # --rabbitmq-block-start 100
 # --rabbitmq-queue-size 5000
+# --rabbitmq-deserialize-trace-action-data true
 ```
 
 ## TODOs
