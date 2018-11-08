@@ -52,6 +52,7 @@ parameters for rabbitmq_plugin
 # --rabbitmq-applied-trx-exchange trx.applied
 # --rabbitmq-block-start 100
 # --rabbitmq-queue-size 5000
+# --rabbitmq-deserialize-trace-action-data true
 ```
 
 ## TODOs

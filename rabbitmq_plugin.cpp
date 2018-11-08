@@ -40,6 +40,7 @@ namespace eosio {
     using chain::packed_transaction;
 
 static appbase::abstract_plugin& _rabbitmq_plugin = app().register_plugin<rabbitmq_plugin>();
+
 using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
     class rabbitmq_plugin_impl {
@@ -85,6 +86,8 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
         void _process_irreversible_block(const chain::block_state_ptr &);
 
+        void deserialize_action_data(chain::action_trace& at);
+
         void init();
 
         bool configured{false};
@@ -113,7 +116,8 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
         std::string m_accept_trx_exchange = "";
         std::string m_applied_trx_exchange = "";
         std::string m_accept_block_exchange = "";
-        
+        bool m_deserialize_trace_action_data = true;
+
     };
 
 
@@ -366,7 +370,13 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
     void rabbitmq_plugin_impl::_process_applied_transaction(const trasaction_info_st &t) {
 
-       uint64_t time = (t.block_time.time_since_epoch().count()/1000);
+        if(m_deserialize_trace_action_data) {
+            for (auto &trace : t.trace->action_traces) {
+                deserialize_action_data(trace);
+            }
+        }
+
+        uint64_t time = (t.block_time.time_since_epoch().count()/1000);
             string transaction_metadata_json =
                     "{\"block_number\":" + std::to_string(t.block_number) + ",\"block_time\":" + std::to_string(time) +
                     ",\"trace\":" + fc::json::to_string(t.trace).c_str() + "}";
@@ -382,6 +392,22 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
     void rabbitmq_plugin_impl::_process_irreversible_block(const chain::block_state_ptr& bs)
     {
+    }
+
+    void rabbitmq_plugin_impl::deserialize_action_data(chain::action_trace& at){
+
+        fc::variant v = chain_plug->chain().to_variant_with_abi(at.act, chain_plug->get_abi_serializer_max_time());
+        fc::variant_object vo = v.get_object();
+
+        string action_data = fc::json::to_string(vo.find("data")->value());
+
+        at.act.data = vector<char>(action_data.begin(), action_data.end());
+
+        if(!at.inline_traces.empty()){
+            for(auto& trace : at.inline_traces) {
+                deserialize_action_data(trace);
+            }
+        }
     }
 
     rabbitmq_plugin_impl::rabbitmq_plugin_impl()
@@ -424,6 +450,8 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
 
     void rabbitmq_plugin::set_program_options(options_description &cli, options_description &cfg) {
         cfg.add_options()
+                ("rabbitmq-deserialize-trace-action-data", bpo::value<bool>()->default_value(true),
+                 "Deserialize action traces into json from abi bin")
                 ("rabbitmq-accept-trx-exchange", bpo::value<std::string>()->default_value("trx.accepted"),
                  "The exchange for accepted transaction.")
                 ("rabbitmq-accept-block-exchange", bpo::value<std::string>()->default_value("block.accepted"),
@@ -437,7 +465,7 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
                 ("rabbitmq-hostname", bpo::value<std::string>()->default_value("127.0.0.1"),
                  "the rabbitmq hostname (e.g. localhost or 127.0.0.1)")
                 ("rabbitmq-port", bpo::value<uint32_t>()->default_value(5672),
-                 "the rabbitmq port (e.g. 5672)")                 
+                 "the rabbitmq port (e.g. 5672)")
                 ("rabbitmq-queue-size", bpo::value<uint32_t>()->default_value(10000),
                  "The target queue size between nodeos and rabbitmq plugin thread.")
                 ("rabbitmq-block-start", bpo::value<uint32_t>()->default_value(0),
@@ -464,13 +492,16 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
                 if (options.count("rabbitmq-accept-block-exchange") != 0){
                     my->m_accept_block_exchange = options.at("rabbitmq-accept-block-exchange").as<std::string>();
                 }
-                
+                if (options.count("rabbitmq-deserialize-trace-action-data") != 0){
+                    my->m_deserialize_trace_action_data = options.at("rabbitmq-deserialize-trace-action-data").as<bool>();
+                }
+
                 if (0!=my->producer->trx_rabbitmq_init(hostname, port, username, password)){
                     elog("trx_rabbitmq_init fail");
                 } else{
                     elog("trx_rabbitmq_init ok");
                 }
-          
+
                 ilog("initializing rabbitmq_plugin");
                 my->configured = true;
 
@@ -488,7 +519,7 @@ using rabbitmq_producer_ptr = std::shared_ptr<class rabbitmq_producer>;
                 my->chain_plug = app().find_plugin<chain_plugin>();
                 EOS_ASSERT(my->chain_plug, chain::missing_chain_plugin_exception, "");
                 auto &chain = my->chain_plug->chain();
-                
+
                 my->accepted_block_connection.emplace( chain.accepted_block.connect( [&]( const chain::block_state_ptr& bs ) {
                             my->accepted_block(bs);
                         }));
